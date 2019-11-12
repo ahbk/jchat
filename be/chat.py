@@ -1,115 +1,181 @@
-from asgiref.sync import async_to_sync
-from django.utils.dateformat import format as dateformat
+from channels.db import database_sync_to_async
 from .models import User, Group, Member, Message
 
 """
-Command         Arguments       Description
-sid             -               Obtain and print session id
-memberships     -               List memberships associated to the session
-new             sign            Start a new group
-join            group, sign     Apply for membership in a group
-detach          group           Remove membership from session
-members         group           Show members in a group
-enter           group           Subscribe to group
-leave           group           Unsubscribe from group
-messages        group           Retreive messages from group
-echo            msg             Echo a message
-post            group, msg      Send a message
+This is chat
+Arguments member and group are strings,
+they correspond to member.sign and group.sign.
+
+Function        Arguments               Description
+session         -                       Obtain and print session id
+join            group, member           Add membership to session
+detach          group, member           Remove membership from session
+members         group                   List members in a group
+enter           group                   Subscribe to group
+leave           group                   Unsubscribe from group
+messages        group, start, limit     Retreive messages from group
+echo            group, text             Echo a text
+post            group, text, parents    Post a message
 """
-def sid(context):
+
+async def session(consumer):
     """
     Create a new session or load an existing and return session key.
 
     channels.sessions.SessionMiddlewareStack attempts to load a session on every request based on
-    HTTP-header "Cookie: sessionid={sessionid}". If session_key is None, the client didn't pass
+    HTTP-header "Cookie: sessionid={sessionid}". If session_key isn't found, the client didn't pass
     the header or used an non-existing sessionid.
 
     Assume that the client has done its best setting header and create a new session for the
     client if none exist.
     """
-    if context["session"].session_key is None:
-        context['session'].create()
-
-    return { 'sessionid': context['session'].session_key }
-
-def new(context, sign):
-    """
-    Start a new group and join it with signature sign
-    """
-    g = Group.objects.create()
-    m = Member.objects.create(sign=sign, group=g)
-
-    context['groups'][g.pk] = m.pk
-    context['session'].save()
-
-    return { 'group': g.pk, 'sign': m.sign }
-
-def memberships(context):
-    ms = Member.objects.filter(pk__in=list(context['groups'].values()))
-
-    return [{
-        'group': {
-            'id': m.group.pk,
-            'created': m.group.created.timestamp() * 1e3,
-            },
-        'member': {
-            'sign': m.sign,
-            'created': m.created.timestamp() * 1e3,
-            }
-        } for m in ms]
-
-def join(context, group, sign):
-    g = Group.objects.get(pk=group)
-    m = Member.objects.create(sign=sign, group=g)
-
-    context['groups'][g.pk] = m.pk
-    context['session'].save()
-
-    return { 'group': g.pk, 'sign': m.sign }
-
-def detach(context, group):
-    member = context['groups'][group]
-    del context['groups'][group]
-    context['session'].save()
-    return { 'group': group, 'member': member }
-
-def messages(context, group):
-    async_to_sync(context['channel'].group_add)('group', 'chat')
-    ms = Message.objects.filter(member__group__pk=group)
-
-    return [{
-        'id': m.pk,
-        'created': m.created.timestamp() * 1e3,
-        'text': m.text,
-        'sign': m.member.sign,
-        'parents': [{'id': p.pk} for p in m.parents.all()]
-        } for m in ms]
-
-def post(context, text, group, parents):
-    async_to_sync(context['channel'].group_send)(
-            'group',
-            {
-                'type': 'chat_message',
-                'message': text
+    def db():
+        if not consumer.scope["session"].exists(consumer.scope["session"].session_key):
+            consumer.scope['session'].create()
+        return {
+            'id': consumer.scope['session'].session_key,
+            'data': my_members(consumer),
+            'memberships': {
+                m.group.sign: {
+                    'id': m.pk,
+                    'sign': m.sign,
+                    'created': m.created.timestamp() * 1e3,
+                    } for m in Member.objects.filter(pk__in=my_members(consumer))}
                 }
-            )
-    m = Message.objects.create(
-            text=text,
-            member=Member.objects.get(pk=context['groups'][group]),
-            )
+    session = await database_sync_to_async(db)()
+    return session
 
-    if parents:
-        m.parents.set(Message.objects.filter(pk__in=parents))
+async def join(consumer, group, member):
+    """
+    Join a group with a member and add to session
+    """
+    def db():
+        g, created = Group.objects.get_or_create(sign=group)
+        m = Member.objects.create(sign=member, group=g)
 
-    return {
+        my_members(consumer, add=m.pk)
+    await database_sync_to_async(db)()
+
+    ms = await consumer.memberships()
+    return ms
+
+async def detach(consumer, group, member):
+    """
+    Detach a group from session
+    """
+    def db():
+        m = Member.objects.get(sign=member, group__sign=group)
+        my_members(consumer, remove=m.pk)
+    await database_sync_to_async(db)()
+
+    ms = await consumer.memberships()
+    return ms
+
+async def members(consumer, group):
+    """
+    List all members of group
+    """
+    def db():
+        return {m.sign: {
+            'id': m.pk,
+            'created': m.created.timestamp() * 1e3
+            } for m in Group.objects.get(sign=group).member_set.all()}
+    ms = await database_sync_to_async(db)()
+
+    return ms
+
+async def enter(consumer, group):
+    """
+    Subscribe to messages in group and return list of current subscriptions
+    """
+    gs = await consumer.group_enter(group)
+    return gs
+
+async def leave(consumer, group):
+    """
+    Unubscribe from messages in group and return list of current subscriptions
+    """
+    gs = await consumer.group_leave(group)
+    return gs
+
+async def messages(consumer, group, start=None, limit=None):
+    """
+    Retreive messages from group
+
+    Parameter start is a message.pk and limit is the maximum number of messages
+    to include forward (positive number) or backward (negative number) in time.
+
+    Sensible default for start is last message and for limit -100.
+
+    Example:
+    start=42 and limit=0 => message 42 only
+    start=42 and limit=10 => message 42 + the ten messages after 42
+    start=42 and limit=-10 => message 42 + the ten messages before 42
+
+    """
+    def db():
+        return [{
             'id': m.pk,
             'created': m.created.timestamp() * 1e3,
+            'text': m.text,
+            'sign': m.member.sign,
+            'parents': [{'id': p.pk} for p in m.parents.all()]
+            } for m in Message.objects.filter(member__group__sign=group)]
+    ms = await database_sync_to_async(db)()
+
+    return ms
+
+async def post(consumer, group, text, parents=None):
+    """
+    Post a message in a group
+    If group is not in session, use first message to create a member.
+    """
+    def db():
+        try:
+            member = Member.objects.get(
+                    pk__in=my_members(consumer),
+                    group__sign=group,
+                    )
+        except Member.DoesNotExist:
+            g, created = Group.objects.get_or_create(sign=group)
+            member = Member.objects.create(
+                    sign=text,
+                    group=g,
+                    )
+            my_members(consumer, add=member.pk)
+
+        m = Message.objects.create(
+                text=text,
+                member=member,
+                )
+
+        if parents:
+            m.parents.set(Message.objects.filter(pk__in=parents))
+
+        return {
+            'id': m.pk,
+            'created': m.created.timestamp() * 1e3,
+            'text': m.text,
+            'sign': m.member.sign,
+            'parents': [{'id': p.pk} for p in m.parents.all()]
             }
+    m = await database_sync_to_async(db)()
+    await consumer.group_send(group, m)
 
-def member(scope, group):
-    return context['groups'].get(group, False)
+    return m
 
-def echo(context, message):
-    print(message)
-    return message
+async def echo(consumer, group, text):
+    message = {'text': text}
+    await consumer.group_send(group, message)
 
+def my_members(consumer, add=None, remove=None):
+    consumer.scope['session'].setdefault('members', [])
+
+    if not add is None:
+        consumer.scope['session']['members'].append(add)
+
+    if not remove is None:
+        consumer.scope['session']['members'].remove(remove)
+
+    consumer.scope['session'].save()
+    return consumer.scope['session']['members']

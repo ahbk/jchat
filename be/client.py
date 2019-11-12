@@ -56,15 +56,15 @@ def parse(fn, args):
     commands = {
                 'sid': ((), "Obtain and print session id"),
                 'memberships': ((), "List memberships associated to the session"),
-                'new': (('group',), "Start a new group"),
+                'new': (('sign',), "Start a new group and join it with signature sign"),
                 'join': (('group', 'sign'), "Apply for membership in a group"),
                 'detach': (('group',), "Remove membership from session"),
                 'members': (('group',), "Show members in a group"),
                 'enter': (('group',), "Subscribe to group"),
                 'leave': (('group',), "Unsubscribe from group"),
                 'messages': (('group',), "Retreive messages from group"),
-                'echo': (('message',), "Echo a message"),
-                'post': (('group', 'message'), "Send a message"),
+                'echo': (('group', 'text'), "Echo a message"),
+                'post': (('group', 'text'), "Send a message"),
                 'help': (('command',), "Display help text for commands"),
                 }
     try:
@@ -90,7 +90,7 @@ def parse(fn, args):
     return json.dumps({'fn': fn, 'args': dict(zip(keys, args))})
 
 def write(message):
-    feed.set_text(feed.text + '\n> ' + message)
+    feed.set_text(feed.text + '\n> ' + str(message))
 
 def send(message):
     if message[0] == ':':
@@ -141,14 +141,23 @@ async def consumer(text_data):
     data = json.loads(text_data)
     message = text_data
 
-    if not 'fn' in data:
-        pass
-
-    elif data['fn'] == 'session':
+    if data.get('type') == 'group_receive':
+        write(data)
+    elif data.get('result', None) is None:
+        write(f"Failed: {data['error']}")
+    elif data['fn'] == 'sid':
         sid = await write_sessionid(data['result']['sessionid'])
-        message = f"Your sessionid: {sid}"
-
-    feed.set_text(feed.text + '\n> ' + message)
+        write(f"Your sessionid: {sid}")
+    elif data['fn'] in ('memberships', 'join', 'detach'):
+        ms = [f"{m['member']['sign']}@{m['group']['id']}" for m in data['result']]
+        write("Current memberships: " + ', '.join(ms))
+    elif data['fn'] == 'new':
+        write(f"Created new group: {data['result']['sign']}@{data['result']['group']}")
+    elif data['fn'] == 'members':
+        ms = [m['sign'] for m in data['result']]
+        write(f"Members of group {data['args']['group']}: " + ', '.join(ms))
+    else:
+        feed.set_text(feed.text + '\n> ' + message)
 
 loop = asyncio.get_event_loop()
 

@@ -1,15 +1,16 @@
-from channels.generic.websocket import WebsocketConsumer
 import json
+from channels.generic.websocket import AsyncWebsocketConsumer
 from . import chat
 
-class ChatConsumer(WebsocketConsumer):
-    def connect(self):
-        self.accept()
+class Chat(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.current_groups = []
+        await self.accept()
 
-    def disconnect(self, close_code):
+    async def disconnect(self, close_code):
         pass
 
-    def receive(self, text_data):
+    async def receive(self, text_data):
         try:
             msg = json.loads(text_data)
         except json.JSONDecodeError as e:
@@ -17,7 +18,7 @@ class ChatConsumer(WebsocketConsumer):
                     'result': None,
                     'error': "json couldn't decode '%s' (%s)" % (text_data, str(e)),
                     }
-            self.send(text_data=json.dumps(msg))
+            await self.send(text_data=json.dumps(msg))
             return
 
         try:
@@ -27,21 +28,43 @@ class ChatConsumer(WebsocketConsumer):
         except (KeyError, AttributeError) as e:
             msg['result'] = None
             msg['error'] = str(e)
-            self.send(text_data=json.dumps(msg))
+            await self.send(text_data=json.dumps(msg))
             return
 
-        ctx = {
-                'session': self.scope['session'],
-                'groups': self.scope['session'].setdefault('groups', {}),
-                'channel': self.channel_layer,
-                }
         try:
-            msg['result'] = fn(ctx, **msg.get('args', {}))
+            msg['result'] = await fn(self, **msg.get('args', {}))
+            if msg['result'] is None:
+                return
         except Exception as e:
             msg['result'] = None
             msg['error'] = str(e)
-            self.send(text_data=json.dumps(msg))
-            return
 
+        await self.send(text_data=json.dumps(msg))
 
-        self.send(text_data=json.dumps(msg))
+    async def group_receive(self, event):
+        await self.send(text_data=json.dumps(event))
+
+    async def group_enter(self, group):
+        await self.channel_layer.group_add(
+            group,
+            self.channel_name
+        )
+        self.current_groups.append(group)
+        return self.current_groups
+
+    async def group_leave(self, group):
+        await self.channel_layer.group_discard(
+            group,
+            self.channel_name
+        )
+        self.current_groups.remove(group)
+        return self.current_groups
+
+    async def group_send(self, group, message):
+        await self.channel_layer.group_send(
+            group,
+            {
+                'type': 'group_receive',
+                'message': message
+            }
+        )

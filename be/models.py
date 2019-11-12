@@ -7,6 +7,7 @@ class User(models.Model):
 
 class Group(models.Model):
     created = models.DateTimeField(auto_now_add=True)
+    sign = models.CharField(max_length=16, unique=True)
 
 class Member(models.Model):
     created = models.DateTimeField(auto_now_add=True)

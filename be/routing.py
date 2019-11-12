@@ -1,10 +1,10 @@
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.sessions import SessionMiddlewareStack
 from django.urls import path
-from . import consumers
+from .consumers import Chat
 
 application = ProtocolTypeRouter({
     'websocket': SessionMiddlewareStack(URLRouter([
-        path('chat/', consumers.ChatConsumer),
+        path('chat/', Chat),
         ]))
     })
