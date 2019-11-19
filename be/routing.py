@@ -5,6 +5,6 @@ from .consumers import Chat
 
 application = ProtocolTypeRouter({
     'websocket': SessionMiddlewareStack(URLRouter([
-        path('chat/', Chat),
+        path('wss/', Chat),
         ]))
     })
