@@ -4,7 +4,7 @@
       <li v-for="m in messages" class="message" :id="'message-' + m.id">
         <dl>
           <dt class="message-text-label">Text:</dt>
-          <dd class="message-text-value">{{ m.text }}</dd>
+          <dd class="message-text-value" v-html="m.text"></dd>
           <dt class="message-created-label">Created:</dt>
           <dd class="message-created-value">{{ m.created }}</dd>
           <dt class="message-sign-label">Sign:</dt>
@@ -31,6 +31,22 @@ const moment = require('moment')
 
 function dateformat(timestamp) {
   return moment(new Date(timestamp)).format('HH:mm')
+}
+
+function escapeHtml(unsafe) {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function urlify(text) {
+  var urlRegex = /(https?:\/\/[^\s]+)/g
+  return text.replace(urlRegex, function(url) {
+    return '<a href="' + url + '" target="_blank">' + url + '</a>'
+  })
 }
 
 export default {
@@ -68,6 +84,7 @@ export default {
 
     merge(db, rt).pipe(
       tap(m => {
+        m.text = urlify(escapeHtml(m.text))
         m.created = dateformat(m.created)
         this.messages.push(m)
         this.messages.sort(function(m1, m2) { return m1.id - m2.id })
