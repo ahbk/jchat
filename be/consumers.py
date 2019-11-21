@@ -22,17 +22,15 @@ class Chat(AsyncWebsocketConsumer):
             return
 
         try:
-            fn = getattr(chat, msg['fn'])
-        except TypeError as e:
-            msg = {}
-        except (KeyError, AttributeError) as e:
+            chat.api[msg['fn']]
+        except (KeyError) as e:
             msg['result'] = None
             msg['error'] = str(e)
             await self.send(text_data=json.dumps(msg))
             return
 
         try:
-            msg['result'] = await fn(self, **msg.get('args', {}))
+            msg['result'] = await getattr(chat, msg['fn'])(self, **msg.get('args', {}))
             if msg['result'] is None:
                 return
         except Exception as e:

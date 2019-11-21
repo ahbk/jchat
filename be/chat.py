@@ -1,22 +1,17 @@
 from channels.db import database_sync_to_async
 from .models import User, Group, Member, Message
 
-"""
-This is chat
-Arguments member and group are strings,
-they correspond to member.sign and group.sign.
-
-Function        Arguments               Description
-session         -                       Obtain and print session id
-join            group, member           Add membership to session
-detach          group, member           Remove membership from session
-members         group                   List members in a group
-enter           group                   Subscribe to group
-leave           group                   Unsubscribe from group
-messages        group, start, limit     Retreive messages from group
-echo            group, text             Echo a text
-post            group, text, parents    Post a message
-"""
+api = {
+        'session': ((), "Obtain and print session id"),
+        'join': (('group', 'member'), "Add membership to session"),
+        'detach': (('group', 'member'), "Remove membership from session"),
+        'members': (('group',), "List members in a group"),
+        'enter': (('group',), "Subscribe to group"),
+        'leave': (('group',), "Unsubscribe from group"),
+        'messages': (('group', 'start', 'limit'), "Retreive messages from group"),
+        'post': (('group', 'text', 'parents'), "Post a message"),
+        'echo': (('group', 'text'), "Echo a text"),
+        }
 
 async def session(consumer):
     """
