@@ -3,6 +3,7 @@ from .models import User, Group, Member, Message
 
 api = {
         'session': ((), "Obtain and print session id"),
+        'memberships': ((), "List all memberships attached to session"),
         'join': (('group', 'member'), "Add membership to session"),
         'detach': (('group', 'member'), "Remove membership from session"),
         'members': (('group',), "List members in a group"),
@@ -30,15 +31,26 @@ async def session(consumer):
         return {
             'id': consumer.scope['session'].session_key,
             'data': my_members(consumer),
-            'memberships': {
-                m.group.sign: {
-                    'id': m.pk,
-                    'sign': m.sign,
-                    'created': m.created.timestamp() * 1e3,
-                    } for m in Member.objects.filter(pk__in=my_members(consumer))}
-                }
+            }
     session = await database_sync_to_async(db)()
     return session
+
+async def memberships(consumer):
+    def db():
+        return [{
+            'group': {
+                'id': m.group.pk,
+                'sign': m.group.sign,
+                },
+            'member': {
+                'id': m.pk,
+                'sign': m.sign,
+                'created': m.created.timestamp() * 1e3,
+                'notifications': m.notifications,
+                }
+            } for m in Member.objects.filter(pk__in=my_members(consumer))]
+    memberships = await database_sync_to_async(db)()
+    return memberships
 
 async def join(consumer, group, member):
     """

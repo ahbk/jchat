@@ -14,6 +14,7 @@ class Member(models.Model):
     sign = models.CharField(max_length=16)
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    notifications = models.BooleanField(default=False)
 
     class Meta:
         unique_together = [['group', 'sign']]

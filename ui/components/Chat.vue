@@ -7,7 +7,6 @@
 <script>
 import Feed from './Feed.vue'
 import Write from './Write.vue'
-import { group$ } from '../controller.js'
 
 export default {
   props: ['group'],
