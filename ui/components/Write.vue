@@ -9,23 +9,20 @@
 </template>
 
 <script>
-import { be$ } from '../controller.js'
+import { be$, queue } from '../controller.js'
 
 export default {
   props: ['group'],
   methods: {
     send: function() {
       let textarea = document.getElementsByName('text')[0]
-      be$.next({
-        fn: 'post',
-        args: {
-          text: textarea.value,
-          group: this.group,
-          parents: [],
-        }
-      })
-      textarea.value = ''
-    },
+      queue('post', {
+				text: textarea.value,
+				group: this.group,
+				parents: [],
+			})
+			textarea.value = ''
+		},
   },
 }
 </script>

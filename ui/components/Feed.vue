@@ -24,7 +24,7 @@
 </template>
 
 <script>
-import { be$ } from '../controller.js'
+import { be$, queue } from '../controller.js'
 import { from, merge } from 'rxjs'
 import { filter, map, exhaustMap, tap, delayWhen } from 'rxjs/operators'
 const moment = require('moment')
@@ -56,33 +56,23 @@ export default {
       messages: [],
     }
   },
-  created: function() {
-    be$.next({
-      fn: 'enter',
-      args: {
-        group: this.group,
-      }
-    })
-    be$.next({
-      fn: 'messages',
-      args: {
-        group: this.group,
-      }
-    })
-
-  },
   mounted: function() {
+    queue('enter', { group: this.group })
+    queue('messages', { group: this.group })
+  },
+  created: function() {
     let db = be$.pipe(
       filter(r => r.fn === 'messages'),
       exhaustMap(r => from(r.result))
     )
 
     let rt = be$.pipe(
+			tap(console.log),
       filter(r => r.type === 'group_receive'),
       map(r => r.message),
     )
 
-    merge(db, rt).pipe(
+    let at = merge(db, rt).pipe(
       tap(m => {
         m.text = urlify(escapeHtml(m.text))
         m.created = dateformat(m.created)
@@ -90,9 +80,14 @@ export default {
         this.messages.sort(function(m1, m2) { return m1.id - m2.id })
       }),
       delayWhen(m => from(this.$nextTick())),
-    ).subscribe(message => {
-      this.$el.scrollTop = this.$el.scrollHeight
-    })
+    )
+
+		let stsub = at.subscribe(
+			message => this.$el.scrollTop = this.$el.scrollHeight,
+		)
+		if(module.hot) {
+			module.hot.dispose(() => stsub.unsubscribe())
+		}
   },
 }
 </script>

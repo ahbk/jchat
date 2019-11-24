@@ -1,11 +1,19 @@
 import { webSocket } from "rxjs/webSocket"
-import { Subject } from 'rxjs'
-import { filter, map } from 'rxjs/operators'
+import { Subject, interval } from 'rxjs'
+import { filter, map, retryWhen } from 'rxjs/operators'
 
 const beurl = process.env.NODE_ENV === 'development' ?
-  'ws://' + window.location.hostname + ':8000' :
-  'wss://' + window.location.hostname + ':8443'
+	'ws://' + window.location.hostname + ':8000' :
+	'wss://' + window.location.hostname + ':8443'
 
-const be$ = webSocket(beurl)
+var bews$ = webSocket(beurl)
+var be$ = bews$.pipe(retryWhen(res => interval(200)))
 
-export { be$ }
+function queue(task, options) {
+	bews$.next({
+		fn: task,
+		args: options,
+	})
+}
+
+export { be$, queue }

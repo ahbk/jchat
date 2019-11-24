@@ -31,15 +31,11 @@ export default {
     }
   },
   methods: {
-    toggle_notifications: function(event) {
-      Notification.requestPermission().then(function(result) {
-          console.log(result);
-      });
-      var notification = new Notification("Hi there!");
-      console.log(event.target.value)
-      console.log(event.target.checked)
-    },
-  },
+		toggle_notifications: function() {
+			console.log(event.target.value)
+			console.log(event.target.checked)
+		},
+	},
   created: function() {
     be$.next({ fn: 'memberships' })
   },
