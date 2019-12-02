@@ -95,15 +95,13 @@ async def enter(consumer, group):
     """
     Subscribe to messages in group and return list of current subscriptions
     """
-    gs = await consumer.group_enter(group)
-    return gs
+    await consumer.group_enter(group)
 
 async def leave(consumer, group):
     """
     Unubscribe from messages in group and return list of current subscriptions
     """
-    gs = await consumer.group_leave(group)
-    return gs
+    await consumer.group_leave(group)
 
 async def messages(consumer, group, start=None, limit=None):
     """
@@ -163,6 +161,7 @@ async def post(consumer, group, text, parents=None):
             'id': m.pk,
             'created': m.created.timestamp() * 1e3,
             'text': m.text,
+            'group': m.member.group.sign,
             'sign': m.member.sign,
             'parents': [{'id': p.pk} for p in m.parents.all()]
             }

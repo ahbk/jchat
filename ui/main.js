@@ -1,16 +1,17 @@
-import { be$ } from './controller.js'
-import { getCookie, setCookie } from 'tiny-cookie'
-import { filter, tap } from 'rxjs/operators'
-import Vue from 'vue'
-import router from './router.js'
-import App from './App.vue'
+import { Subject, merge } from 'rxjs'
 
-new Vue({ router, render: h => h(App) }).$mount('#app')
+import backend from './workers/backend.js'
+import user from './workers/user.js'
+import logger from './workers/logger.js'
+import session from './workers/session.js'
+import routing from './workers/routing.js'
 
-// Create or resume session
-be$.pipe(
-	filter(r => r.fn === 'session'),
-).subscribe(r => setCookie('sessionid', r.result.id, { expires: '1Y' }))
+const chat$ = new Subject()
 
-be$.next({ fn: 'session' })
-window.be$ = be$
+const main = merge(
+	backend(chat$),
+	user(chat$),
+	logger(chat$),
+	session(chat$),
+	routing(chat$),
+).subscribe(message => chat$.next(message))

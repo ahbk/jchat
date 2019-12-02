@@ -18,32 +18,8 @@
     </ol>
   </div>
 </template>
-
 <script>
-import { be$ } from '../controller.js'
-import { from, merge } from 'rxjs'
-import { filter, map, exhaustMap, tap } from 'rxjs/operators'
 
 export default {
-  data() {
-    return {
-      memberships: [],
-    }
-  },
-  methods: {
-		toggle_notifications: function() {
-			console.log(event.target.value)
-			console.log(event.target.checked)
-		},
-	},
-  created: function() {
-    be$.next({ fn: 'memberships' })
-  },
-  mounted: function() {
-    be$.pipe(
-      filter(r => r.fn === 'memberships'),
-      exhaustMap(r => from(r.result)),
-    ).subscribe(membership => this.memberships.push(membership))
-  },
 }
 </script>

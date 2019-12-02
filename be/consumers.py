@@ -4,7 +4,9 @@ from . import chat
 
 class Chat(AsyncWebsocketConsumer):
     async def connect(self):
-        self.current_groups = []
+        ms = await chat.memberships(self)
+        for m in ms:
+            await self.group_enter(m['group']['sign'])
         await self.accept()
 
     async def disconnect(self, close_code):
@@ -47,16 +49,12 @@ class Chat(AsyncWebsocketConsumer):
             group,
             self.channel_name
         )
-        self.current_groups.append(group)
-        return self.current_groups
 
     async def group_leave(self, group):
         await self.channel_layer.group_discard(
             group,
             self.channel_name
         )
-        self.current_groups.remove(group)
-        return self.current_groups
 
     async def group_send(self, group, message):
         await self.channel_layer.group_send(

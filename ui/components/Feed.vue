@@ -1,7 +1,7 @@
 <template>
   <div class="feed">
     <ol class="messages">
-      <li v-for="m in messages" class="message" :id="'message-' + m.id">
+      <li v-for="m in feed" class="message" :id="'message-' + m.id">
         <dl>
           <dt class="message-text-label">Text:</dt>
           <dd class="message-text-value" v-html="m.text"></dd>
@@ -12,7 +12,7 @@
           <dt class="message-parents-label">Parents:</dt>
           <dd class="message-parents-value">
           <ul>
-            <li v-for="mid in m.parents" class="message-parent" :id="'message-parent-' + m.id">
+            <li v-for="mid in m.parents" class="message-parent" :id="'message-parent-' + mid">
               <router-link :to="`/${group}/${mid}`">{{ mid }}</router-link>
             </li>
           </ul>
@@ -24,70 +24,31 @@
 </template>
 
 <script>
-import { be$, queue } from '../controller.js'
-import { from, merge } from 'rxjs'
-import { filter, map, exhaustMap, tap, delayWhen } from 'rxjs/operators'
-const moment = require('moment')
-
-function dateformat(timestamp) {
-  return moment(new Date(timestamp)).format('HH:mm')
-}
-
-function escapeHtml(unsafe) {
-  return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function urlify(text) {
-  var urlRegex = /(https?:\/\/[^\s]+)/g
-  return text.replace(urlRegex, function(url) {
-    return '<a href="' + url + '" target="_blank">' + url + '</a>'
-  })
-}
 
 export default {
   props: ['group'],
-  data() {
-    return {
-      messages: [],
-    }
-  },
-  mounted: function() {
-    queue('enter', { group: this.group })
-    queue('messages', { group: this.group })
-  },
-  created: function() {
-    let db = be$.pipe(
-      filter(r => r.fn === 'messages'),
-      exhaustMap(r => from(r.result))
-    )
-
-    let rt = be$.pipe(
-			tap(console.log),
-      filter(r => r.type === 'group_receive'),
-      map(r => r.message),
-    )
-
-    let at = merge(db, rt).pipe(
-      tap(m => {
-        m.text = urlify(escapeHtml(m.text))
-        m.created = dateformat(m.created)
-        this.messages.push(m)
-        this.messages.sort(function(m1, m2) { return m1.id - m2.id })
-      }),
-      delayWhen(m => from(this.$nextTick())),
-    )
-
-		let stsub = at.subscribe(
-			message => this.$el.scrollTop = this.$el.scrollHeight,
-		)
-		if(module.hot) {
-			module.hot.dispose(() => stsub.unsubscribe())
-		}
-  },
+	computed: {
+		feed() {
+			return this.$store.state.feed[this.group] || []
+		},
+	},
+	methods: {
+		more() {
+			let event = new CustomEvent( 'morehistory', { detail: this.group })
+			this.$el.dispatchEvent(event)
+		},
+	},
+	mounted: function() {
+		let event = new CustomEvent( 'feedCreated', { detail: this.$el })
+		document.dispatchEvent(event)
+	},
+	activated: function() {
+		let event = new CustomEvent( 'active', { detail: this.group })
+		this.$el.dispatchEvent(event)
+	},
+	deactivated: function() {
+		let event = new CustomEvent( 'idle', { group: this.group })
+		this.$el.dispatchEvent(event)
+	},
 }
 </script>

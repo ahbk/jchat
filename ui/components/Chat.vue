@@ -4,6 +4,7 @@
     <write :group="group"></write>
   </div>
 </template>
+
 <script>
 import Feed from './Feed.vue'
 import Write from './Write.vue'
