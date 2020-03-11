@@ -23,9 +23,10 @@ import {
 	filter,
 } from 'rxjs/operators'
 
+const protocol = window.location.hostname === 'seval.io' ? 'wss' : 'ws'
 
 const ws = webSocket({
-	url: `ws://${ window.location.hostname}:8443`,
+	url: `${protocol}://${window.location.hostname}:8443`,
 	openObserver: { next: e => console.log('ws: open') },
 	closeObserver: { next: e => console.log('ws: closed') },
 })
