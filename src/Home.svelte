@@ -1,26 +1,9 @@
 <script>
-	import { filter } from 'rxjs/operators'
-	import page from 'page'
+	import { createEventDispatcher } from 'svelte'
+	const dispatch = createEventDispatcher()
 
-
-	export let ws;
-	let name, password;
-
-	ws.pipe(
-		filter(m => m.req === 'login' && m.res),
-	).subscribe(receiveLogin)
-
-	function receiveLogin(message) {
-		if(message.res) {
-			page('/chat')
-		} else {
-			page('/')
-		}
-	}
-
-	function requestLogin(e) {
-		ws.next({req: 'login', name, password})
-	}
+	let name
+	let password
 </script>
 
 <main>
@@ -28,7 +11,7 @@
 
 		<h1>Login</h1>
 
-		<form on:submit|preventDefault={requestLogin}>
+		<form on:submit|preventDefault={() => dispatch('login', {name, password})}>
 			<label>Username</label>
 			<input name="name" bind:value={name} required/>
 

@@ -1,6 +1,8 @@
-import App from './App.svelte';
 import { webSocket } from 'rxjs/webSocket'
 import page from 'page'
+import App from './App.svelte'
+import { setCookie } from 'tiny-cookie'
+import { userlist } from './stores.js'
 
 import {
 	pipe,
@@ -19,20 +21,40 @@ import {
 	filter,
 } from 'rxjs/operators'
 
+
 const ws = webSocket({
 	url: `ws://${ window.location.hostname}:8443`,
 	openObserver: { next: e => console.log('ws: open') },
 	closeObserver: { next: e => console.log('ws: closed') },
 })
-ws.pipe(tap(console.log), backoff(1000, 50)).subscribe(console.log)
 
+ws.pipe(
+	filter(m => m.req === 'login' && m.res),
+).subscribe(receiveLogin)
 
-const app = new App({
-	target: document.body,
-	props: {
-		ws,
+function receiveLogin(message) {
+	if(message.res) {
+		page('/chat')
+	} else {
+		page('/')
 	}
-});
+}
+
+function requestLogin(e) {
+	ws.next({req: 'login', name, password})
+}
+ws.pipe(
+	tap(m => setCookie('sessionid', m.res.sid, { expires: '1Y' })),
+	backoff(1000, 50)
+).subscribe(console.log)
+
+ws.pipe(
+	filter(m => !m.auth),
+).subscribe(m => page('/'))
+
+ws.pipe(
+	filter(m => m.req === 'users'),
+).subscribe(m => userlist.set(m.res))
 
 function backoff(maxTries, ms) {
 	return pipe(
@@ -43,4 +65,17 @@ function backoff(maxTries, ms) {
 		))
 	)
 }
+
+page('/chat', users)
+
+function users(context, next) {
+	ws.next({ req: 'users' })
+	next()
+}
+
+const app = new App({
+	target: document.body,
+	props: { page, ws }
+});
+
 export default app;

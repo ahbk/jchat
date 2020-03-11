@@ -1,15 +1,29 @@
 <script>
-	import page from 'page'
 	import Home from './Home.svelte'
 	import Chat from './Chat.svelte'
 
-	export let ws
-	let component
+	export let page, ws
 
-	page('/', () => component = Home)
-	page('/chat', () => component = Chat)
+	let component
+	let user
+
+	page('/', () => component = 'home')
+	page('/chat/:user', ctx => user = ctx.params.user)
+	page('/chat*', () => component = 'chat')
 
 	page.start()
+
+	function login(e) {
+		ws.next({
+			req: 'login',
+			name: e.detail.name,
+			password: e.detail.password,
+		})
+	}
 </script>
 
-<svelte:component this={component} ws={ws} />
+{#if component === 'home'}
+	<Home on:login={login}/>
+{:else}
+	<Chat bind:user={user}/>
+{/if}

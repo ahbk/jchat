@@ -18,6 +18,7 @@
   "dependencies": {
     "page": "^1.11.5",
     "rxjs": "^6.5.4",
-    "sirv-cli": "^0.4.4"
+    "sirv-cli": "^0.4.4",
+    "tiny-cookie": "^2.3.1"
   }
 }
