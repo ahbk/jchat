@@ -5,13 +5,22 @@
 	export let page, ws
 
 	let component
-	let user
+	let receiver
 
 	page('/', () => component = 'home')
-	page('/chat/:user', ctx => user = ctx.params.user)
+	page('/chat/:receiver', selectReceiver)
 	page('/chat*', () => component = 'chat')
 
 	page.start()
+
+	function selectReceiver(context, next) {
+		receiver = context.params.receiver
+		ws.next({
+			req: 'messages',
+			receiver
+		})
+		next()
+	}
 
 	function login(e) {
 		ws.next({
@@ -20,10 +29,18 @@
 			password: e.detail.password,
 		})
 	}
+
+	function post(e) {
+		ws.next({
+			req: 'post',
+			text: e.detail.text,
+			receiver: e.detail.receiver,
+		})
+	}
 </script>
 
 {#if component === 'home'}
-	<Home on:login={login}/>
+	<Home on:login={login} />
 {:else}
-	<Chat bind:user={user}/>
+	<Chat bind:receiver={receiver} on:post={post} />
 {/if}

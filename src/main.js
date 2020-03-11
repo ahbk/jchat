@@ -2,7 +2,9 @@ import { webSocket } from 'rxjs/webSocket'
 import page from 'page'
 import App from './App.svelte'
 import { setCookie } from 'tiny-cookie'
-import { userlist } from './stores.js'
+import { user, userlist, messagelist } from './stores.js'
+import { get } from 'svelte/store';
+
 
 import {
 	pipe,
@@ -35,6 +37,7 @@ ws.pipe(
 function receiveLogin(message) {
 	if(message.res) {
 		page('/chat')
+		user.set(message.name)
 	} else {
 		page('/')
 	}
@@ -43,8 +46,9 @@ function receiveLogin(message) {
 function requestLogin(e) {
 	ws.next({req: 'login', name, password})
 }
+
 ws.pipe(
-	tap(m => setCookie('sessionid', m.res.sid, { expires: '1Y' })),
+	// tap(m => setCookie('sessionid', m.res.sid, { expires: '1Y' })),
 	backoff(1000, 50)
 ).subscribe(console.log)
 
@@ -55,6 +59,14 @@ ws.pipe(
 ws.pipe(
 	filter(m => m.req === 'users'),
 ).subscribe(m => userlist.set(m.res))
+
+ws.pipe(
+	filter(m => m.req === 'messages'),
+).subscribe(m => messagelist.set(m.res))
+
+ws.pipe(
+	filter(m => m.req === 'post'),
+).subscribe(m => messagelist.set([...get(messagelist), m.res]))
 
 function backoff(maxTries, ms) {
 	return pipe(
