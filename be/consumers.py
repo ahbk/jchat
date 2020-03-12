@@ -1,14 +1,6 @@
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
-from django.contrib.auth.models import User
-from be.models import Message
-from django.contrib.auth import authenticate
 from channels import auth
-from channels.db import database_sync_to_async
-from django.db import IntegrityError
-
-def groupname(*users):
-    return ''.join(sorted(users))
-
+from . import chat
 
 class Chat(AsyncJsonWebsocketConsumer):
     async def connect(self):
@@ -22,83 +14,45 @@ class Chat(AsyncJsonWebsocketConsumer):
 
     async def receive_json(self, content):
 
+        # Add session id and auth flag to every response
         content['sid'] = self.scope['session'].session_key
         content['auth'] = self.scope['user'].is_authenticated
 
-        def login():
-            try:
-                User.objects.create_user(content['name'], '', content['password'])
-            except IntegrityError:
-                pass
+        if content['req'] == 'login':
+            content = await chat.login(content)
 
-            user = authenticate(username=content['name'], password=content['password'])
-            return user
+            if bool(content['res']):
+                await auth.login(self.scope, content['res'])
 
-        def users():
-            return [ {'name': user.username } for user in User.objects.exclude(pk=self.scope['user'].pk) ]
-
-        def messages(user):
-            def fn():
-                sent = Message.objects.filter(sender=self.scope['user'], receiver__username=user)
-                received = Message.objects.filter(receiver=self.scope['user'], sender__username=user)
-                return [ {
-                    'text': message.text,
-                    'timestamp': message.timestamp.timestamp() * 1e3,
-                    'sender': message.sender.username,
-                    'receiver': message.receiver.username,
-                    } for message in (sent | received).order_by('pk') ]
-            return fn
-
-        def post(text, receiver):
-            def fn():
-                return Message.objects.create(
-                        sender=self.scope['user'],
-                        receiver=User.objects.get(username=receiver),
-                        text=text,
-                        )
-            return fn
-
-        if content['req'] == 'login' and 'name' in content and 'password' in content:
-            user = await database_sync_to_async(login)()
-
-            if bool(user):
-                await auth.login(self.scope, user)
-
-            content['auth'] = content['res'] = bool(user)
-
+            content['res'] = bool(content['res'])
             await self.send_json(content)
 
+            return
+
+        # The request handlers below are for authenticated users only
+        if not self.scope['user'].is_authenticated:
+            await self.send_json(content)
+            return
+
+        content['pk'] = self.scope['user'].pk
+
+        # Get a list of all users
         if content['req'] == 'users':
-            content['res'] = []
-            if self.scope['user'].is_authenticated:
-                content['res'] = await database_sync_to_async(users)()
-            await self.send_json(content)
+            await self.send_json(await chat.users(content))
 
+        # Get a list of all messages with a selected user
         if content['req'] == 'messages':
-            content['res'] = False
-            if self.scope['user'].is_authenticated:
-                content['res'] = await database_sync_to_async(messages(content['receiver']))()
-                
-                if self.scope.get('last_group', False):
-                    self.channel_layer.group_discard(self.scope['last_group'], self.channel_name)
+            await self.send_json(await chat.messages(content))
 
-                # Use sorted usernames to create a common group identifier with the receiver
-                self.scope['last_group'] = group = groupname(content['receiver'], self.scope['user'].username)
+            # If we're added to a group, leave it. We only want to subscribe to selected user.
+            if self.scope.get('last_group', False):
+                self.channel_layer.group_discard(self.scope['last_group'], self.channel_name)
 
+            # Use sorted usernames to create a common group identifier with the receiver
+            self.scope['last_group'] = group = chat.groupname(content['receiver'], self.scope['user'].username)
+            await self.channel_layer.group_add(group, self.channel_name)
 
-                await self.channel_layer.group_add(group, self.channel_name)
-            await self.send_json(content)
-
+        # Post a message
         if content['req'] == 'post':
-            content['res'] = None
-            if self.scope['user'].is_authenticated:
-                message = await database_sync_to_async(post(content['text'], content['receiver']))()
-                content['res'] = {
-                        'text': message.text,
-                        'timestamp': message.timestamp.timestamp() * 1e3,
-                        'sender': message.sender.username,
-                        'receiver': message.receiver.username,
-                        'group': groupname(message.sender.username, message.receiver.username),
-                        }
-
-                await self.channel_layer.group_send(content['res']['group'], { 'type': 'group_receive', 'message': content })
+            content = await chat.post(content)
+            await self.channel_layer.group_send(content['res']['group'], { 'type': 'group_receive', 'message': content })

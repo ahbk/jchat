@@ -1,25 +1,24 @@
 <script>
-	import Home from './Home.svelte'
-	import Chat from './Chat.svelte'
+  import Home from './Home.svelte';
+  import Chat from './Chat.svelte';
 
-	export let page, ws
+  export let page, ws;
 
-	let component
-	let receiver
+  let component, receiver;
 
-	page('/', () => component = 'home')
-	page('/chat/:receiver', selectReceiver)
-	page('/chat*', () => component = 'chat')
+  page('/', () => component = 'home');
+  page('/chat/:receiver', selectReceiver);
+  page('/chat*', () => component = 'chat');
 
-	page.start()
+  page.start();
 
 	function selectReceiver(context, next) {
-		receiver = context.params.receiver
+    receiver = context.params.receiver;
 		ws.next({
 			req: 'messages',
 			receiver
-		})
-		next()
+    });
+    next();
 	}
 
 	function login(e) {
@@ -27,7 +26,7 @@
 			req: 'login',
 			name: e.detail.name,
 			password: e.detail.password,
-		})
+    });
 	}
 
 	function post(e) {
@@ -35,7 +34,7 @@
 			req: 'post',
 			text: e.detail.text,
 			receiver: e.detail.receiver,
-		})
+    });
 	}
 </script>
 

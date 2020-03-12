@@ -1,9 +1,7 @@
 <script>
-	import { createEventDispatcher } from 'svelte'
-	const dispatch = createEventDispatcher()
-
-	let name
-	let password
+  import { createEventDispatcher } from 'svelte';
+  const dispatch = createEventDispatcher();
+  let name, password, message;
 </script>
 
 <main>
@@ -21,6 +19,10 @@
 			<br/>
 
 			<button type="submit">Login</button>
+
+			{#if message === 'wrong password'}
+				<p class="error">Wrong password<p>
+			{/if}
 		</form>
 
 	</div>
@@ -38,6 +40,11 @@
 	h1 {
 		font-size: 2em;
 		font-weight: 100;
+	}
+
+	.error {
+		color: red;
+		font-weight: bold;
 	}
 
 	@media (min-width: 640px) {

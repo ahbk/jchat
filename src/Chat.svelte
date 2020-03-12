@@ -1,12 +1,12 @@
 <script>
-	import { user, userlist, messagelist } from './stores.js'
-	import { createEventDispatcher } from 'svelte'
-	import moment from 'moment'
+  import { user, userlist, messagelist } from './stores.js';
+  import { createEventDispatcher } from 'svelte';
+  import moment from 'moment';
 
-	export let receiver = undefined
+  export let receiver = undefined;
 
-	const dispatch = createEventDispatcher()
-	let text
+  const dispatch = createEventDispatcher();
+  let text;
 </script>
 
 <h1>Chat - {$user}</h1>
