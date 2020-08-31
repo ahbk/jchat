@@ -12,7 +12,7 @@ import Write from './Write.vue'
 export default {
   props: ['group'],
   components: {
-    Feed, Write
+    Feed, Write,
   },
 }
 </script>

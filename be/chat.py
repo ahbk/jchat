@@ -1,3 +1,4 @@
+import sys
 from channels.db import database_sync_to_async
 from .models import User, Group, Member, Message
 
@@ -13,6 +14,17 @@ api = {
         'post': (('group', 'text', 'parents'), "Post a message"),
         'echo': (('group', 'text'), "Echo a text"),
         }
+
+async def route(consumer, message):
+    command = message['text'].split()
+    text = 're: %s: %s.' % (message['text'], api[command[1]][1])
+    payload = await getattr(sys.modules[__name__], command[1])(consumer, **message.get('payload', {}))
+    
+    return {
+            'text': text,
+            'parents': [ message['id'] ],
+            'payload': payload,
+            }
 
 async def session(consumer):
     """
@@ -103,34 +115,30 @@ async def leave(consumer, group):
     """
     await consumer.group_leave(group)
 
-async def messages(consumer, group, start=None, limit=None):
+async def messages(consumer, group=None):
     """
     Retreive messages from group
-
-    Parameter start is a message.pk and limit is the maximum number of messages
-    to include forward (positive number) or backward (negative number) in time.
-
-    Sensible default for start is last message and for limit -100.
-
-    Example:
-    start=42 and limit=0 => message 42 only
-    start=42 and limit=10 => message 42 + the ten messages after 42
-    start=42 and limit=-10 => message 42 + the ten messages before 42
-
     """
+    if group is None:
+        ms = await memberships(consumer)
+        groups = [ m['group']['sign'] for m in ms ]
+    else:
+        groups = [ group ]
+
     def db():
         return [{
-            'id': m.pk,
+            'pk': m.pk,
             'created': m.created.timestamp() * 1e3,
             'text': m.text,
             'sign': m.member.sign,
+            'group': m.member.group.sign,
             'parents': [{'id': p.pk} for p in m.parents.all()]
-            } for m in Message.objects.filter(member__group__sign=group)]
+            } for m in Message.objects.filter(member__group__sign__in=groups)]
     ms = await database_sync_to_async(db)()
 
     return ms
 
-async def post(consumer, group, text, parents=None):
+async def post(consumer, **message):
     """
     Post a message in a group
     If group is not in session, use first message to create a member.
@@ -139,34 +147,34 @@ async def post(consumer, group, text, parents=None):
         try:
             member = Member.objects.get(
                     pk__in=my_members(consumer),
-                    group__sign=group,
+                    group__sign=message['group'],
                     )
         except Member.DoesNotExist:
-            g, created = Group.objects.get_or_create(sign=group)
+            g, created = Group.objects.get_or_create(sign=message['group'])
             member = Member.objects.create(
-                    sign=text,
+                    sign=message['text'],
                     group=g,
                     )
             my_members(consumer, add=member.pk)
 
         m = Message.objects.create(
-                text=text,
+                text=message['text'],
                 member=member,
                 )
 
-        if parents:
-            m.parents.set(Message.objects.filter(pk__in=parents))
+        if message['parents']:
+            m.parents.set(Message.objects.filter(pk__in=message['parents']))
 
         return {
-            'id': m.pk,
+            'pk': m.pk,
             'created': m.created.timestamp() * 1e3,
             'text': m.text,
             'group': m.member.group.sign,
             'sign': m.member.sign,
-            'parents': [{'id': p.pk} for p in m.parents.all()]
+            'parents': [p.pk for p in m.parents.all()]
             }
     m = await database_sync_to_async(db)()
-    await consumer.group_send(group, m)
+    await consumer.group_send(message['group'], m)
 
     return m
 

@@ -8,7 +8,7 @@
         <td class="memberships-heading-notifications">Notis</td>
       </tr>
       <tr v-for="m in memberships" class="membership" :id="'membership-' + m.member.id">
-          <td class="membership-cell-group">/{{ m.group.sign }}</td>
+				<td class="membership-cell-group"><router-link :to="`/chat/${m.group.sign}`">{{ m.group.sign }}</router-link></td>
           <td class="membership-cell-sign">{{ m.member.sign }}</td>
           <td class="membership-cell-notifications">
             <input type="checkbox" :value="m.member.id" v-model="m.member.notifications" v-on:click="toggle_notifications">
@@ -21,5 +21,19 @@
 <script>
 
 export default {
+	computed: {
+		memberships() {
+			return this.$store.state.memberships
+		},
+	},
+	methods: {
+		toggle_notifications: function(event) {
+			console.log(event, this)
+		},
+	},
+	mounted: function() {
+		let event = new CustomEvent('homeCreated', { detail: this.$el })
+		document.dispatchEvent(event)
+	},
 }
 </script>

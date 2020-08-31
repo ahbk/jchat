@@ -1,8 +1,7 @@
-import json
-from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from . import chat
 
-class Chat(AsyncWebsocketConsumer):
+class Chat(AsyncJsonWebsocketConsumer):
     async def connect(self):
         ms = await chat.memberships(self)
         for m in ms:
@@ -12,37 +11,12 @@ class Chat(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         pass
 
-    async def receive(self, text_data):
-        try:
-            msg = json.loads(text_data)
-        except json.JSONDecodeError as e:
-            msg = {
-                    'result': None,
-                    'error': "json couldn't decode '%s' (%s)" % (text_data, str(e)),
-                    }
-            await self.send(text_data=json.dumps(msg))
-            return
-
-        try:
-            chat.api[msg['fn']]
-        except (KeyError) as e:
-            msg['result'] = None
-            msg['error'] = str(e)
-            await self.send(text_data=json.dumps(msg))
-            return
-
-        try:
-            msg['result'] = await getattr(chat, msg['fn'])(self, **msg.get('args', {}))
-            if msg['result'] is None:
-                return
-        except Exception as e:
-            msg['result'] = None
-            msg['error'] = str(e)
-
-        await self.send(text_data=json.dumps(msg))
+    async def receive_json(self, content):
+        message = await chat.route(self, content)
+        await self.send_json(message)
 
     async def group_receive(self, event):
-        await self.send(text_data=json.dumps(event))
+        await self.send_json(event['message'])
 
     async def group_enter(self, group):
         await self.channel_layer.group_add(

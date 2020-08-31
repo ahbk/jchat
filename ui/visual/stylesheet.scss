@@ -18,6 +18,13 @@ html, body {
   width: 1px;
 }
 
+.guide {
+	position: absolute;
+	z-index: 10;
+	background-color: white;
+	width: 100%;
+}
+
 .chat {
   position: fixed;
   display: flex;

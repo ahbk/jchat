@@ -1,6 +1,8 @@
 import {
 	Observable,
-	fromEvent
+	fromEvent,
+	merge,
+	from,
 } from 'rxjs'
 
 import { 
@@ -8,34 +10,50 @@ import {
 	tap,
 	switchMap,
 	filter,
+	last,
 } from 'rxjs/operators'
 
-export default function(chat$) {
-	return Observable.create(observer => {
 
-		// When an instance of Write is created, start nexting its posts.
-		let subs = chat$.pipe(
-			switchMap(_ => fromEvent(document, 'writeCreated')),
-			switchMap(event => fromEvent(event.detail, 'post')),
-			map(event => event.detail),
-			tap(message => observer.next(message)),
-		).subscribe()
-
-		// Emit messages that should be posted (but isn't)
-		let posts$ = chat$.pipe(
-			filter(message => message.group !== 'chat' && !message.id),
-		)
-
-		// Reply to unposted posts with "post"
-		subs.add(posts$.subscribe(message => observer.next({
-			group: 'chat',
-			sign: 'user',
-			text: 'post',
-			parents: [ message ],
-		})))
-
-		return () => {
-			subs.unsubscribe()
-		}
-	})
+function posts(observer, chat) {
+	return fromEvent(document, 'writeCreated').pipe(
+		switchMap(event => fromEvent(event.detail, 'post')),
+		map(event => event.detail),
+		tap(message => {
+			if(message.group === chat.group) {
+				message = chat.patch(message)
+			} else {
+				message = chat.message('backend post', [], message)
+			}
+			observer.next(message)
+		}),
+	)
 }
+
+function more(observer, chat) {
+	return fromEvent(document, 'feedCreated').pipe(
+		switchMap(event => fromEvent(event.detail, 'more')),
+		map(event => event.detail),
+		tap(m => observer.next(chat.message('more', [], m))),
+	)
+}
+
+function messages(observer, chat) {
+	return chat.stream.pipe(
+		chat.res(chat.message('backend messages')),
+		switchMap(m => from(m.payload)),
+		tap(m => observer.next(m)),
+	)
+}
+
+export default chat => Observable.create(observer => {
+	let work = [posts, more, messages].map(fn => fn(observer, chat).subscribe())
+
+	chat.replay.pipe(
+		chat.sys(/^resolved chat$/),
+		tap(m => observer.next(chat.message('backend messages', [m], m.payload))),
+	).subscribe()
+
+	return () => {
+		work.map(sub => sub.unsubscribe())
+	}
+})

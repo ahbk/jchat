@@ -29,25 +29,25 @@ export default {
   props: ['group'],
 	computed: {
 		feed() {
-			return this.$store.state.feed[this.group] || []
+			return this.$store.state.feed[this.group]
 		},
 	},
 	methods: {
 		more() {
-			let event = new CustomEvent( 'morehistory', { detail: this.group })
+			let event = new CustomEvent('more', { detail: this.group })
 			this.$el.dispatchEvent(event)
 		},
 	},
 	mounted: function() {
-		let event = new CustomEvent( 'feedCreated', { detail: this.$el })
+		let event = new CustomEvent('feedCreated', { detail: this.$el })
 		document.dispatchEvent(event)
 	},
 	activated: function() {
-		let event = new CustomEvent( 'active', { detail: this.group })
+		let event = new CustomEvent('active', { detail: this.group })
 		this.$el.dispatchEvent(event)
 	},
 	deactivated: function() {
-		let event = new CustomEvent( 'idle', { group: this.group })
+		let event = new CustomEvent('idle', { group: this.group })
 		this.$el.dispatchEvent(event)
 	},
 }
