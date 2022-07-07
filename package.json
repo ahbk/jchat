@@ -20,7 +20,7 @@
     "svelte": "^3.0.0"
   },
   "dependencies": {
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "page": "^1.11.5",
     "rxjs": "^6.5.4",
     "sirv-cli": "^0.4.4",
